@@ -7,15 +7,11 @@ try:
 except ImportError:
     from pip.req import parse_requirements
 
-install_reqs = parse_requirements('requirements.txt', session=uuid.uuid1())
+#install_reqs = parse_requirements('requirements.txt', session=uuid.uuid1())
 
-setup(name="lightsaber",
+setup(name="rlsaber",
         version="0.1",
         license="MIT",
-        description="Utility scripts for machine learning research",
-        url="https://github.com/imai-laboratory/lightsaber",
-        packages=find_packages(),
-        scripts=[
-            'lightsaber/tools/plot-json',
-            'lightsaber/tools/echo-timestamp'
-        ])
+        description="Reinforcement learning tools like the galactic weapon",
+        url="https://github.com/imai-laboratory/rlsaber",
+        packages=find_packages())
