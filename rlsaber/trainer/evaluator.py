@@ -86,7 +86,7 @@ class Recorder:
         self.images = []
 
 def save_video(path, images, frame_rate=30.0, bgr=True):
-    fourcc = cv2.VideoWriter_fourcc(*'MP4S')
+    fourcc = cv2.VideoWriter_fourcc(*'MP4V')
     height, width = images[0].shape[:2]
     writer = cv2.VideoWriter(path, fourcc, frame_rate, (width, height), True)
     for image in images:
