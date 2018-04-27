@@ -7,4 +7,5 @@ def atari_preprocess(image, shape):
     state = cv2.resize(gray, (210, 160))
     state = cv2.resize(state, (84, 110))
     state = state[18:102, :]
+    state = cv2.resize(state, tuple(shape))
     return state
