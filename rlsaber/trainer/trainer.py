@@ -197,6 +197,7 @@ class BatchTrainer(Trainer):
                 training=True,
                 render=False,
                 debug=True,
+                time_horizon=20,
                 before_action=None,
                 after_action=None,
                 end_episode=None):
@@ -216,6 +217,7 @@ class BatchTrainer(Trainer):
 
         # overwrite global_step
         self.global_step = 0
+        self.time_horizon = time_horizon
 
     # TODO: Remove this overwrite
     def move_to_next(self, states, reward, done):
@@ -242,17 +244,13 @@ class BatchTrainer(Trainer):
             self.sum_of_rewards = [0 for _ in range(n_envs)]
             rewards = [0 for _ in range(n_envs)]
             dones = [False for _ in range(n_envs)]
-            states = self.env.reset()
+            states = [self.env.reset(i) for i in range(n_envs)]
             queue_states = [copy.deepcopy(self.init_states) for _ in range(n_envs)]
+            cycle = 0
             while True:
                 for i, state in enumerate(states):
                     queue_states[i].append(state.tolist())
                 np_states = np.array(list(map(lambda s: list(s), queue_states)))
-
-                # episode reaches the end
-                if False not in dones:
-                    self.finish_episode(np_states, rewards)
-                    break
 
                 for i in range(n_envs):
                     self.before_action_callback(
@@ -284,24 +282,32 @@ class BatchTrainer(Trainer):
                             self.global_step,
                             self.episode
                         )
+                        if self.debug:
+                            print('step: {}, episode: {}, reward: {}'.format(
+                                self.global_step,
+                                self.episode + i + 1,
+                                self.sum_of_rewards[i]
+                            ))
 
                 for i in range(n_envs):
                     self.sum_of_rewards[i] += rewards[i]
                     if not dones[i]:
                         self.global_step += 1
                         self.local_step[i] += 1
+                cycle += 1
+
+                if cycle % self.time_horizon == 0:
+                    for i in range(n_envs):
+                        if not self.env.running[i]:
+                            states[i] = self.env.reset(i)
+                            self.local_step[i] = 0
+                            self.sum_of_rewards[i] = 0
+                            rewards[i] = 0
+                            dones[i] = False
+                            queue_states[i] = copy.deepcopy(self.init_states)
 
             if self.is_training_finished():
                 return
-
-    # overwrite
-    def print_info(self):
-        for i in range(self.env.get_num_of_envs()):
-            print('step: {}, episode: {}, reward: {}'.format(
-                self.global_step,
-                self.episode + i + 1,
-                self.sum_of_rewards[i]
-            ))
 
 class AsyncTrainer:
     def __init__(self,

@@ -76,13 +76,9 @@ class BatchEnvWrapper:
             self.running[i] = not done
         return states, rewards, dones, infos
 
-    def reset(self):
-        self.running = [True for _ in range(len(self.envs))]
-        states = []
-        for env in self.envs:
-            state = env.reset()
-            states.append(state)
-        return states
+    def reset(self, index):
+        self.running[index] = True
+        return self.envs[index].reset()
 
     def render(self, mode='human'):
         return self.envs[0].render(mode=mode)
