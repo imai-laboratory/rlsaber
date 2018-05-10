@@ -246,10 +246,11 @@ class BatchTrainer(Trainer):
             dones = [False for _ in range(n_envs)]
             states = [self.env.reset(i) for i in range(n_envs)]
             queue_states = [copy.deepcopy(self.init_states) for _ in range(n_envs)]
-            cycle = 0
+            for i, state in enumerate(states):
+                queue_states[i].append(state.tolist())
+                self.agent.reset(i, np.array(list(queue_states[i])))
+            t = 0
             while True:
-                for i, state in enumerate(states):
-                    queue_states[i].append(state.tolist())
                 np_states = np.array(list(map(lambda s: list(s), queue_states)))
 
                 for i in range(n_envs):
@@ -271,6 +272,10 @@ class BatchTrainer(Trainer):
                         self.global_step,
                         self.local_step[i]
                     )
+
+                # add state to queue
+                for i, state in enumerate(states):
+                    queue_states[i].append(state)
 
                 # check ended episodes
                 for i in range(n_envs):
@@ -294,9 +299,9 @@ class BatchTrainer(Trainer):
                     if not dones[i]:
                         self.global_step += 1
                         self.local_step[i] += 1
-                cycle += 1
 
-                if cycle % self.time_horizon == 0:
+                if t > 0 and t % self.time_horizon == 0:
+                    self.agent.train()
                     for i in range(n_envs):
                         if not self.env.running[i]:
                             states[i] = self.env.reset(i)
@@ -305,6 +310,9 @@ class BatchTrainer(Trainer):
                             rewards[i] = 0
                             dones[i] = False
                             queue_states[i] = copy.deepcopy(self.init_states)
+                            queue_states[i].append(states[i])
+                            self.agent.reset(i, queue_states[i])
+                t += 1
 
             if self.is_training_finished():
                 return
