@@ -290,7 +290,7 @@ class BatchTrainer(Trainer):
                         if self.debug:
                             print('step: {}, episode: {}, reward: {}'.format(
                                 self.global_step,
-                                self.episode + i + 1,
+                                self.episode,
                                 self.sum_of_rewards[i]
                             ))
 
