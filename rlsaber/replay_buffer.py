@@ -89,7 +89,7 @@ class EpisodeReplayBuffer:
         done = []
         for index in indices:
             episode = self.buffer[index]
-            start_pos = np.random.randint(len(episode['obs_t']) - step_size)
+            start_pos = np.random.randint(len(episode['obs_t']) - step_size + 1)
             obs_t.append(episode['obs_t'][start_pos:start_pos+step_size])
             actions.append(episode['action'][start_pos:start_pos+step_size])
             rewards.append(episode['reward'][start_pos:start_pos+step_size])
