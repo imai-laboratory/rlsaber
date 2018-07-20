@@ -1,6 +1,7 @@
 from collections import deque
 from gym import spaces
 import numpy as np
+import gym
 import copy
 import cv2
 
