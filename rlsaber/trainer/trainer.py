@@ -1,4 +1,5 @@
 from collections import deque
+from tqdm import tqdm
 import tensorflow as tf
 import numpy as np
 import copy
@@ -84,10 +85,9 @@ class Trainer:
             reward,
             self.training
         )
-        if self.debug:
-            self.print_info()
 
     def start(self):
+        pbar = tqdm(total=self.final_step)
         while True:
             self.local_step = 0
             self.sum_of_rewards = 0
@@ -103,10 +103,14 @@ class Trainer:
 
                 # episode reaches the end
                 if done:
+                    raw_reward = self.env.get_results()['rewards']
                     self.episode += 1
+                    pbar.update(self.local_step)
+                    msg = 'step: {}, episode: {}, reward: {}'
+                    pbar.set_description(
+                        msg.format(self.global_step, self.episode, raw_reward))
                     self.end_episode_callback(
-                        self.env.get_results()['rewards'],
-                        self.global_step, self.episode)
+                        raw_reward, self.global_step, self.episode)
                     self.finish_episode(states, reward)
                     break
 
@@ -127,14 +131,8 @@ class Trainer:
                     self.evaluate()
 
             if self.is_training_finished():
+                pbar.close()
                 return
-
-    def print_info(self):
-        print('step: {}, episode: {}, reward: {}'.format(
-            self.global_step,
-            self.episode,
-            self.env.get_results()['rewards']
-        ))
 
     def before_action_callback(self, states, global_step, local_step):
         if self.before_action is not None:
@@ -237,85 +235,86 @@ class BatchTrainer(Trainer):
     # overwrite
     def start(self):
         to_ndarray = lambda q: np.array(list(map(lambda s: list(s), q)))
+
+        # values for the number of n environment
+        n_envs = self.env.get_num_of_envs()
+        self.local_step = [0 for _ in range(n_envs)]
+        self.sum_of_rewards = [0 for _ in range(n_envs)]
+        rewards = [0 for _ in range(n_envs)]
+        dones = [False for _ in range(n_envs)]
+        states = [self.env.reset(i) for i in range(n_envs)]
+        queue_states = [copy.deepcopy(self.init_states) for _ in range(n_envs)]
+        for i, state in enumerate(states):
+            queue_states[i].append(state.tolist())
+        t = 0
+        pbar = tqdm(total=self.final_step)
+
+        # training loop
         while True:
-            # values for the number of n environment
-            n_envs = self.env.get_num_of_envs()
-            self.local_step = [0 for _ in range(n_envs)]
-            self.sum_of_rewards = [0 for _ in range(n_envs)]
-            rewards = [0 for _ in range(n_envs)]
-            dones = [False for _ in range(n_envs)]
-            states = [self.env.reset(i) for i in range(n_envs)]
-            queue_states = [copy.deepcopy(self.init_states) for _ in range(n_envs)]
+            np_states = np.array(list(map(lambda s: list(s), queue_states)))
+
+            for i in range(n_envs):
+                self.before_action_callback(
+                    states[i],
+                    self.global_step,
+                    self.local_step[i]
+                )
+
+            # backup episode status
+            prev_dones = dones
+            states, rewards, dones, infos = self.move_to_next(
+                to_ndarray(np_states), rewards, prev_dones)
+
+            for i in range(n_envs):
+                self.after_action_callback(
+                    states[i],
+                    rewards[i],
+                    self.global_step,
+                    self.local_step[i]
+                )
+
+            # add state to queue
             for i, state in enumerate(states):
-                queue_states[i].append(state.tolist())
-            t = 0
-            while True:
+                queue_states[i].append(state)
+
+            # check ended episodes
+            for i in range(n_envs):
+                if not prev_dones[i] and dones[i]:
+                    raw_reward = self.env.get_results()[i]['rewards']
+                    self.episode += 1
+                    msg = 'step: {}, episode: {}, reward: {}'
+                    pbar.update(self.local_step[i])
+                    pbar.set_description(
+                        msg.format(self.global_step, self.episode, raw_reward))
+                    # callback at the end of episode
+                    self.end_episode(raw_reward, self.global_step, self.episode)
+
+            for i in range(n_envs):
+                self.sum_of_rewards[i] += rewards[i]
+                if not dones[i]:
+                    self.global_step += 1
+                    self.local_step[i] += 1
+
+            t += 1
+
+            # pass transitions and update network
+            should_update = t > 0 and t % self.time_horizon == 0
+            self.agent.receive_next(to_ndarray(queue_states), rewards,
+                                    dones, should_update and self.training)
+
+            if should_update:
                 for i in range(n_envs):
-                    self.before_action_callback(
-                        states[i],
-                        self.global_step,
-                        self.local_step[i]
-                    )
-
-                # backup episode status
-                prev_dones = dones
-                states, rewards, dones, infos = self.move_to_next(
-                    to_ndarray(queue_states), rewards, prev_dones)
-
-                for i in range(n_envs):
-                    self.after_action_callback(
-                        states[i],
-                        rewards[i],
-                        self.global_step,
-                        self.local_step[i]
-                    )
-
-                # add state to queue
-                for i, state in enumerate(states):
-                    queue_states[i].append(state)
-
-                # check ended episodes
-                for i in range(n_envs):
-                    if not prev_dones[i] and dones[i]:
-                        self.episode += 1
-                        # callback at the end of episode
-                        self.end_episode(
-                            self.env.get_results()[i]['rewards'],
-                            self.global_step,
-                            self.episode
-                        )
-                        if self.debug:
-                            print('step: {}, episode: {}, reward: {}'.format(
-                                self.global_step,
-                                self.episode,
-                                self.sum_of_rewards[i]
-                            ))
-
-                for i in range(n_envs):
-                    self.sum_of_rewards[i] += rewards[i]
-                    if not dones[i]:
-                        self.global_step += 1
-                        self.local_step[i] += 1
-
-                t += 1
-
-                # pass transitions and update network
-                should_update = t > 0 and t % self.time_horizon == 0
-                self.agent.receive_next(to_ndarray(queue_states), rewards,
-                                        dones, should_update and self.training)
-
-                if should_update:
-                    for i in range(n_envs):
-                        if not self.env.running[i]:
-                            states[i] = self.env.reset(i)
-                            self.local_step[i] = 0
-                            self.sum_of_rewards[i] = 0
-                            rewards[i] = 0
-                            dones[i] = False
-                            queue_states[i] = copy.deepcopy(self.init_states)
-                            queue_states[i].append(states[i])
+                    if not self.env.running[i]:
+                        states[i] = self.env.reset(i)
+                        self.local_step[i] = 0
+                        self.sum_of_rewards[i] = 0
+                        rewards[i] = 0
+                        dones[i] = False
+                        queue_states[i] = copy.deepcopy(self.init_states)
+                        queue_states[i].append(states[i])
 
             if self.is_training_finished():
+                pbar.close()
                 return
 
 class AsyncTrainer:
@@ -360,15 +359,6 @@ class AsyncTrainer:
                 shared_step = self.meta_data['shared_step']
                 self.meta_data['shared_episode'] += 1
                 shared_episode = self.meta_data['shared_episode']
-                if debug:
-                    msg = 'worker: {}, global_step: {}, local_step: {}, episode: {}, reward: {}'
-                    print(msg.format(
-                        i,
-                        shared_step,
-                        global_step,
-                        shared_episode,
-                        reward
-                    ))
                 if end_episode is not None:
                     end_episode(
                         reward,
