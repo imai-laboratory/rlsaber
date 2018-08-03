@@ -105,6 +105,8 @@ class Trainer:
 
                 # episode reaches the end
                 if done:
+                    pbar.update(self.local_step)
+                    pbar.set_description('step {}'.format(self.global_step))
                     self.episode += 1
                     self.end_episode_callback(
                         self.env.get_results()['rewards'],
@@ -124,8 +126,6 @@ class Trainer:
                 self.sum_of_rewards += reward
                 self.global_step += 1
                 self.local_step += 1
-                pbar.update(1)
-                pbar.set_description('step {}'.format(self.global_step))
 
                 if self.evaluator is not None:
                     self.evaluate()
@@ -304,13 +304,14 @@ class BatchTrainer(Trainer):
                 if not dones[i]:
                     self.global_step += 1
                     self.local_step[i] += 1
-                    pbar.update(1)
-                    pbar.set_description('global step {}'.format(self.global_step))
 
             if t > 0 and t % self.time_horizon == 0:
                 self.agent.train()
                 for i in range(n_envs):
                     if not self.env.running[i]:
+                        pbar.update(self.local_step[i])
+                        pbar.set_description(
+                            'global step {}'.format(self.global_step))
                         states[i] = self.env.reset(i)
                         self.local_step[i] = 0
                         self.sum_of_rewards[i] = 0
