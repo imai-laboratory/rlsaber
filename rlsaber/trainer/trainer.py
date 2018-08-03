@@ -221,7 +221,6 @@ class BatchTrainer(Trainer):
 
     # TODO: Remove this overwrite
     def move_to_next(self, states, reward, done):
-        states = np.array(list(states))
         # take next action
         action = self.agent.act(
             states,
@@ -237,6 +236,7 @@ class BatchTrainer(Trainer):
 
     # overwrite
     def start(self):
+        to_ndarray = lambda q: np.array(list(map(lambda s: list(s), q)))
         while True:
             # values for the number of n environment
             n_envs = self.env.get_num_of_envs()
@@ -248,11 +248,8 @@ class BatchTrainer(Trainer):
             queue_states = [copy.deepcopy(self.init_states) for _ in range(n_envs)]
             for i, state in enumerate(states):
                 queue_states[i].append(state.tolist())
-                self.agent.reset(i, np.array(list(queue_states[i])))
             t = 0
             while True:
-                np_states = np.array(list(map(lambda s: list(s), queue_states)))
-
                 for i in range(n_envs):
                     self.before_action_callback(
                         states[i],
@@ -263,7 +260,7 @@ class BatchTrainer(Trainer):
                 # backup episode status
                 prev_dones = dones
                 states, rewards, dones, infos = self.move_to_next(
-                    np_states, rewards, prev_dones)
+                    to_ndarray(queue_states), rewards, prev_dones)
 
                 for i in range(n_envs):
                     self.after_action_callback(
@@ -300,8 +297,14 @@ class BatchTrainer(Trainer):
                         self.global_step += 1
                         self.local_step[i] += 1
 
-                if t > 0 and t % self.time_horizon == 0:
-                    self.agent.train()
+                t += 1
+
+                # pass transitions and update network
+                should_update = t > 0 and t % self.time_horizon == 0
+                self.agent.receive_next(to_ndarray(queue_states), rewards,
+                                        dones, should_update and self.training)
+
+                if should_update:
                     for i in range(n_envs):
                         if not self.env.running[i]:
                             states[i] = self.env.reset(i)
@@ -311,8 +314,6 @@ class BatchTrainer(Trainer):
                             dones[i] = False
                             queue_states[i] = copy.deepcopy(self.init_states)
                             queue_states[i].append(states[i])
-                            self.agent.reset(i, queue_states[i])
-                t += 1
 
             if self.is_training_finished():
                 return
