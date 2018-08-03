@@ -234,7 +234,7 @@ class BatchTrainer(Trainer):
 
     # overwrite
     def start(self):
-        to_ndarray = lambda q: np.array(list(map(lambda s: list(s), q)))
+        to_ndarray = lambda q: np.array(list(map(lambda s: list(s), copy.deepcopy(q))))
 
         # values for the number of n environment
         n_envs = self.env.get_num_of_envs()
@@ -251,8 +251,6 @@ class BatchTrainer(Trainer):
 
         # training loop
         while True:
-            np_states = np.array(list(map(lambda s: list(s), queue_states)))
-
             for i in range(n_envs):
                 self.before_action_callback(
                     states[i],
@@ -263,7 +261,7 @@ class BatchTrainer(Trainer):
             # backup episode status
             prev_dones = dones
             states, rewards, dones, infos = self.move_to_next(
-                to_ndarray(np_states), rewards, prev_dones)
+                to_ndarray(queue_states), rewards, prev_dones)
 
             for i in range(n_envs):
                 self.after_action_callback(
