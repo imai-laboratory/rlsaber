@@ -87,7 +87,7 @@ class Trainer:
         )
 
     def start(self):
-        pbar = tqdm(total=self.final_step)
+        pbar = tqdm(total=self.final_step, dynamic_ncols=True)
         while True:
             self.local_step = 0
             self.sum_of_rewards = 0
@@ -247,7 +247,7 @@ class BatchTrainer(Trainer):
         for i, state in enumerate(states):
             queue_states[i].append(state.tolist())
         t = 0
-        pbar = tqdm(total=self.final_step)
+        pbar = tqdm(total=self.final_step, dynamic_ncols=True)
 
         # training loop
         while True:
