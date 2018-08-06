@@ -17,21 +17,21 @@ class AgentInterface:
 
 class Trainer:
     def __init__(self,
-                env,
-                agent,
-                state_shape=[84, 84],
-                final_step=1e7,
-                state_window=1,
-                training=True,
-                render=False,
-                debug=True,
-                before_action=None,
-                after_action=None,
-                end_episode=None,
-                is_finished=None,
-                evaluator=None,
-                end_eval=None,
-                should_eval=lambda s, e: s % 10 ** 5 == 0):
+                 env,
+                 agent,
+                 state_shape=[84, 84],
+                 final_step=1e7,
+                 state_window=1,
+                 training=True,
+                 render=False,
+                 debug=True,
+                 before_action=None,
+                 after_action=None,
+                 end_episode=None,
+                 is_finished=None,
+                 evaluator=None,
+                 end_eval=None,
+                 should_eval=lambda s, e: s % 10 ** 5 == 0):
         self.env = env
         self.final_step = final_step
         self.init_states = deque(
