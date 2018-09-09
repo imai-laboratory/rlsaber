@@ -17,21 +17,22 @@ class AgentInterface:
 
 class Trainer:
     def __init__(self,
-                env,
-                agent,
-                state_shape=[84, 84],
-                final_step=1e7,
-                state_window=1,
-                training=True,
-                render=False,
-                debug=True,
-                before_action=None,
-                after_action=None,
-                end_episode=None,
-                is_finished=None,
-                evaluator=None,
-                end_eval=None,
-                should_eval=lambda s, e: s % 10 ** 5 == 0):
+                 env,
+                 agent,
+                 state_shape=[84, 84],
+                 final_step=1e7,
+                 state_window=1,
+                 training=True,
+                 render=False,
+                 debug=True,
+                 progress_bar=True,
+                 before_action=None,
+                 after_action=None,
+                 end_episode=None,
+                 is_finished=None,
+                 evaluator=None,
+                 end_eval=None,
+                 should_eval=lambda s, e: s % 10 ** 5 == 0):
         self.env = env
         self.final_step = final_step
         self.init_states = deque(
@@ -45,6 +46,7 @@ class Trainer:
         self.training = training
         self.render = render
         self.debug = debug
+        self.progress_bar = progress_bar
         self.before_action = before_action
         self.after_action = after_action
         self.end_episode = end_episode
@@ -87,7 +89,8 @@ class Trainer:
         )
 
     def start(self):
-        pbar = tqdm(total=self.final_step, dynamic_ncols=True)
+        if self.progress_bar:
+            pbar = tqdm(total=self.final_step, dynamic_ncols=True)
         while True:
             self.local_step = 0
             self.sum_of_rewards = 0
@@ -105,10 +108,11 @@ class Trainer:
                 if done:
                     raw_reward = self.env.get_results()['rewards']
                     self.episode += 1
-                    pbar.update(self.local_step)
-                    msg = 'step: {}, episode: {}, reward: {}'
-                    pbar.set_description(
-                        msg.format(self.global_step, self.episode, raw_reward))
+                    if self.progress_bar:
+                        pbar.update(self.local_step)
+                        msg = 'step: {}, episode: {}, reward: {}'.format(
+                            self.global_step, self.episode, raw_reward)
+                        pbar.set_description(msg)
                     self.end_episode_callback(
                         raw_reward, self.global_step, self.episode)
                     self.finish_episode(states, reward)
@@ -131,7 +135,8 @@ class Trainer:
                     self.evaluate()
 
             if self.is_training_finished():
-                pbar.close()
+                if self.progress_bar:
+                    pbar.close()
                 return
 
     def before_action_callback(self, states, global_step, local_step):
@@ -327,6 +332,7 @@ class AsyncTrainer:
                 training=True,
                 render=False,
                 debug=True,
+                progress_bar=True,
                 before_action=None,
                 after_action=None,
                 end_episode=None,
@@ -341,6 +347,8 @@ class AsyncTrainer:
             'last_eval_step': 0,
             'last_eval_episode': 0
         }
+        if progress_bar:
+            pbar = tqdm(total=final_step, dynamic_ncols=True)
 
         # inserted callbacks
         def _before_action(state, global_step, local_step):
@@ -367,6 +375,11 @@ class AsyncTrainer:
                         shared_episode,
                         episode
                     )
+                if progress_bar:
+                    pbar.update(self.trainers[i].local_step)
+                    msg = 'step: {}, episode: {}, reward: {}'.format(
+                        shared_step, shared_episode, reward)
+                    pbar.set_description(msg)
             return func
 
         def _end_eval(step, episode, rewards):
@@ -409,6 +422,7 @@ class AsyncTrainer:
                 training=training,
                 render=i == 0 and render,
                 debug=False,
+                progress_bar=False,
                 before_action=_before_action,
                 after_action=_after_action,
                 end_episode=_end_episode(i),
@@ -423,12 +437,12 @@ class AsyncTrainer:
         sess = tf.get_default_session()
         coord = tf.train.Coordinator()
         # gym renderer is only available on the main thread
-        render_trainer = self.trainers.pop(0)
+        render_trainer = self.trainers[0]
         threads = []
-        for i in range(len(self.trainers)):
+        for i in range(len(self.trainers) - 1):
             def run(index):
                 with sess.as_default():
-                    self.trainers[index].start()
+                    self.trainers[index + 1].start()
             thread = threading.Thread(target=run, args=(i,))
             thread.start()
             threads.append(thread)
