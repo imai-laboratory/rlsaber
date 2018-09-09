@@ -196,6 +196,7 @@ class BatchTrainer(Trainer):
                 render=False,
                 debug=True,
                 time_horizon=20,
+                batch_size=None,
                 before_action=None,
                 after_action=None,
                 end_episode=None):
@@ -216,6 +217,7 @@ class BatchTrainer(Trainer):
         # overwrite global_step
         self.global_step = 0
         self.time_horizon = time_horizon
+        self.batch_size = time_horizon if batch_size is None else batch_size
 
     # TODO: Remove this overwrite
     def move_to_next(self, states, reward, done):
@@ -300,7 +302,7 @@ class BatchTrainer(Trainer):
             self.agent.receive_next(to_ndarray(queue_states), rewards,
                                     dones, should_update and self.training)
 
-            if should_update:
+            if t % self.batch_size == 0:
                 for i in range(n_envs):
                     if not self.env.running[i]:
                         states[i] = self.env.reset(i)
