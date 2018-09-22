@@ -279,12 +279,8 @@ class BatchTrainer(Trainer):
                 )
 
             # add state to queue
-            for i, state in enumerate(states):
-                queue_states[i].append(state)
-
-            # check ended episodes
-            for i in range(n_envs):
-                if not prev_dones[i] and dones[i]:
+            for i, (state, done) in enumerate(zip(states, dones)):
+                if done:
                     raw_reward = self.env.get_results()[i]['rewards']
                     self.episode += 1
                     msg = 'step: {}, episode: {}, reward: {}'
@@ -293,6 +289,10 @@ class BatchTrainer(Trainer):
                         msg.format(self.global_step, self.episode, raw_reward))
                     # callback at the end of episode
                     self.end_episode(raw_reward, self.global_step, self.episode)
+                    queue_states[i] = copy.deepcopy(self.init_states)
+                    self.sum_of_rewards[i] = 0
+                    self.local_step[i] = 0
+                queue_states[i].append(state)
 
             for i in range(n_envs):
                 self.sum_of_rewards[i] += rewards[i]
@@ -306,17 +306,6 @@ class BatchTrainer(Trainer):
             should_update = t > 0 and t % self.time_horizon == 0
             self.agent.receive_next(to_ndarray(queue_states), rewards,
                                     dones, should_update and self.training)
-
-            if t % self.batch_size == 0:
-                for i in range(n_envs):
-                    if not self.env.running[i]:
-                        states[i] = self.env.reset(i)
-                        self.local_step[i] = 0
-                        self.sum_of_rewards[i] = 0
-                        rewards[i] = 0
-                        dones[i] = False
-                        queue_states[i] = copy.deepcopy(self.init_states)
-                        queue_states[i].append(states[i])
 
             if self.is_training_finished():
                 pbar.close()

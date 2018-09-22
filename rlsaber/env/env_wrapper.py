@@ -72,11 +72,11 @@ class ActionRepeatEnvWrapper(EnvWrapper):
 class BatchEnvWrapper:
     def __init__(self, envs):
         self.envs = envs
-        self.running = [True for _ in range(len(envs))]
         self.observation_space = envs[0].observation_space
         self.action_space = envs[0].action_space
         state_shape = envs[0].observation_space.shape
         self.zero_state = np.zeros_like(self.reset(0), dtype=np.float32)
+        self.results = [env.get_results() for env in self.envs]
 
     def step(self, actions):
         states = []
@@ -84,22 +84,17 @@ class BatchEnvWrapper:
         dones = []
         infos = []
         for i, env in enumerate(self.envs):
-            if self.running[i]:
-                state, reward, done, info = env.step(actions[i])
-            else:
-                state = copy.deepcopy(self.zero_state)
-                reward = 0
-                done = True
-                info = None
+            state, reward, done, info = env.step(actions[i])
+            self.results[i] = copy.copy(env.get_results())
+            if done:
+                state = env.reset()
             states.append(state)
             rewards.append(reward)
             dones.append(done)
             infos.append(info)
-            self.running[i] = not done
         return states, rewards, dones, infos
 
     def reset(self, index):
-        self.running[index] = True
         return self.envs[index].reset()
 
     def render(self, mode='human'):
@@ -109,8 +104,7 @@ class BatchEnvWrapper:
         return len(self.envs)
 
     def get_results(self):
-        return list(map(lambda e: e.get_results(), self.envs))
-
+        return self.results
 
 # from https://github.com/openai/baselines
 class NoopResetEnv(gym.Wrapper):
