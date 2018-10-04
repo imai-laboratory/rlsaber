@@ -200,8 +200,6 @@ class BatchTrainer(Trainer):
                 training=True,
                 render=False,
                 debug=True,
-                time_horizon=20,
-                batch_size=None,
                 before_action=None,
                 after_action=None,
                 end_episode=None):
@@ -221,8 +219,6 @@ class BatchTrainer(Trainer):
 
         # overwrite global_step
         self.global_step = 0
-        self.time_horizon = time_horizon
-        self.batch_size = time_horizon if batch_size is None else batch_size
 
     # TODO: Remove this overwrite
     def move_to_next(self, states, reward, done):
@@ -302,11 +298,6 @@ class BatchTrainer(Trainer):
                     self.local_step[i] += 1
 
             t += 1
-
-            # pass transitions and update network
-            should_update = t > 0 and t % self.time_horizon == 0
-            self.agent.receive_next(to_ndarray(queue_states), rewards,
-                                    dones, should_update and self.training)
 
             if self.is_training_finished():
                 pbar.close()
