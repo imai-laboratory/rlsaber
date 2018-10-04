@@ -283,12 +283,13 @@ class BatchTrainer(Trainer):
                 if done:
                     raw_reward = self.env.get_results()[i]['rewards']
                     self.episode += 1
+                    global_step = self.global_step - (n_envs - i - 1)
                     msg = 'step: {}, episode: {}, reward: {}'
                     pbar.update(self.local_step[i])
                     pbar.set_description(
-                        msg.format(self.global_step, self.episode, raw_reward))
+                        msg.format(global_step, self.episode, raw_reward))
                     # callback at the end of episode
-                    self.end_episode(raw_reward, self.global_step, self.episode)
+                    self.end_episode(raw_reward, global_step, self.episode)
                     queue_states[i] = copy.deepcopy(self.init_states)
                     self.sum_of_rewards[i] = 0
                     self.local_step[i] = 0
