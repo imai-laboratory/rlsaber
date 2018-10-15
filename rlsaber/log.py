@@ -37,6 +37,11 @@ class TfBoardLogger:
         self.placeholders[name] = placeholder
         self.summaries[name] = tf.summary.scalar(name + '_summary', placeholder)
 
+    def register_image(self, name, shape, n):
+        placeholder = tf.placeholder(tf.float32, [-1] + shape, name=name)
+        self.placeholders[name] = placeholder
+        self.summaries[name] = tf.summary.image(name + '_summary', placeholder, n)
+
     def plot(self, name, value, step):
         sess = tf.get_default_session()
         placeholder = self.placeholders[name]
